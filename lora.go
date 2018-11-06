@@ -41,7 +41,7 @@ const go_REG_FIFO=0x00
 
 const go_OPMODE_LORA=0x80
 const go_OPMODE_STANDBY=0x01
-
+const go_OPMODE_RX=0x05
 const go_OPMODE_TX=0x03
 
 const go_RegPaRamp=0x0A
@@ -57,6 +57,11 @@ const go_REG_IRQ_FLAGS_MASK=0x11
 const go_IRQ_LORA_TXDONE_MASK=0x08
 const go_not_IRQ_LORA_TXDONE_MASK=0xF7
 const go_REG_FIFO_TX_BASE_AD=0x0E
+
+const go_REG_PKT_SNR_VALUE=0x19
+const go_REG_FIFO_RX_CURRENT_ADDR=0x10
+const go_REG_RX_NB_BYTES=0x13
+
 
 const (
   SF7 = 7 
@@ -74,6 +79,9 @@ var go_CHANNEL int = 0
 var go_ssPin int = 6
 var go_dio0 int = 7
 var go_RST int = 0
+
+var message string
+var receivedbytes byte
 
 func go_selectreceiver() {
   C.digitalWrite(C.int(go_ssPin), C.LOW)
@@ -244,6 +252,67 @@ func go_writeBuf (addr byte, send_string string) {
     go_unselectreceiver()                  
 }
 
+func go_receivepacket() {
+   var SNR int
+   var rssicorr int 
+
+   if int(C.digitalRead(C.int(go_dio0))) == 1 {
+     if a,message := go_receive(); a {
+       value := byte(go_readReg(go_REG_PKT_SNR_VALUE))
+       if (value & 0x80) == 1 {    //The SNR sign bit is 1
+         // Invert and divide by 4
+         value = (( value^0xFF + 1 ) & 0xFF ) >> 2
+         SNR = int(-value)
+       } else {
+         //divide by 4
+         SNR = int((value & 0xFF ) >> 2)
+       }
+     
+       if sx1272 {
+         rssicorr = 139
+       } else { 
+         rssicorr = 157
+       }
+     
+       fmt.Printf("Packet RSSI: %d, ", int(go_readReg(0x1A))-rssicorr)
+       fmt.Printf("RSSI: %d, ", int(go_readReg(0x1B))-rssicorr)
+       fmt.Printf("SNR: %v, ", SNR)
+       fmt.Printf("Length: %v", int(receivedbytes))
+       fmt.Printf("\n")
+       fmt.Printf("Payload: %s\n", message)
+
+     } //received a message
+  } // dio0=1
+}
+
+func go_receive () (bool,string) {
+  var payload [256]byte
+
+  // clear rxDone
+  go_writeReg(go_REG_IRQ_FLAGS, 0x40)
+  
+  irqflags := int(go_readReg(go_REG_IRQ_FLAGS))
+  
+  // payload crc: 0x20
+  if (irqflags & 0x20) == 0x20 {
+    fmt.Println("CRC error")
+    go_writeReg(go_REG_IRQ_FLAGS, 0x20)
+    return false, string(payload[:])
+  } else {
+    currentAddr := byte(go_readReg(go_REG_FIFO_RX_CURRENT_ADDR))
+    receivedCount := byte(go_readReg(go_REG_RX_NB_BYTES))
+    receivedbytes = receivedCount
+
+    go_writeReg(go_REG_FIFO_ADDR_PTR, currentAddr)
+
+    for i:=0; i < int(receivedCount); i++ {
+      payload[i] = byte(go_readReg(go_REG_FIFO))
+    }
+
+  }
+  return true,string(payload[:])
+}
+
 func main() {
   if len(os.Args[1:]) == 0 {
     fmt.Printf("Usage: %v sender|rec [message]\n",os.Args[0])
@@ -258,23 +327,37 @@ func main() {
 
   go_SetupLoRa()
 
+
 // Starting Send
-  go_opmodeLora()
-  go_opmode(go_OPMODE_STANDBY)
+  if os.Args[1] != "rec" {
 
-  go_writeReg(go_RegPaRamp, (go_readReg(go_RegPaRamp) & 0xF0) | 0x08); // set PA ramp-up time 50 uSec
+    go_opmodeLora()
+    go_opmode(go_OPMODE_STANDBY)
 
-  go_configPower(23)
+    go_writeReg(go_RegPaRamp, (go_readReg(go_RegPaRamp) & 0xF0) | 0x08); // set PA ramp-up time 50 uSec
+
+    go_configPower(23)
   
-  fmt.Printf("Send packets at SF%d on %f Mhz.\n", go_sf, float64(float64(go_freq) / 1000000) )
-  fmt.Println("-----------------------")
+    fmt.Printf("Send packets at SF%d on %f Mhz.\n", go_sf, float64(float64(go_freq) / 1000000) )
+    fmt.Println("-----------------------")
 
-  var string_to_send string="test23"
+    var string_to_send string="test23"
 
-  for {
-    go_txlora(string_to_send)
-    time.Sleep(2*time.Second)  
+    for {
+      go_txlora(string_to_send)
+      time.Sleep(2*time.Second)  
+    }
+  } else {
+    // radio init
+    go_opmodeLora()
+    go_opmode(go_OPMODE_STANDBY)
+    go_opmode(go_OPMODE_RX)
+    fmt.Printf("Listening at SF%d on %f Mhz.\n", go_sf, float64(float64(go_freq)/ 1000000) )
+    fmt.Println("-----------------------")
+    for {
+      go_receivepacket()
+      time.Sleep(1*time.Millisecond)
+    }
   }
-
 }
 
