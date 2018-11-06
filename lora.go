@@ -67,13 +67,17 @@ const (
 const go_sf=SF7
 
 var sx1272 bool
+var go_CHANNEL int = 0
+var go_ssPin int = 6
+var go_dio0 int = 7
+var go_RST int = 0
 
 func go_selectreceiver() {
-  C.digitalWrite(C.ssPin, C.LOW)
+  C.digitalWrite(C.int(go_ssPin), C.LOW)
 }
 
 func go_unselectreceiver() {
-  C.digitalWrite(C.ssPin, C.HIGH)
+  C.digitalWrite(C.int(go_ssPin), C.HIGH)
 }
 
 func go_writeReg(addr byte, value byte) {
@@ -82,7 +86,7 @@ func go_writeReg(addr byte, value byte) {
   spibuf[1] = C.uchar( value )
   go_selectreceiver()
   spibufPtr:= (*C.uchar)(unsafe.Pointer(&spibuf))
-  C.wiringPiSPIDataRW(C.CHANNEL, spibufPtr, 2)
+  C.wiringPiSPIDataRW(C.int(go_CHANNEL), spibufPtr, 2)
   go_unselectreceiver()
 }
 
@@ -92,7 +96,7 @@ func go_readReg(addr byte) byte {
   spibuf[0] = C.uchar( addr & 0x7F )
   spibuf[1] = C.uchar( 0x00 )
   spibufPtr:= (*C.uchar)(unsafe.Pointer(&spibuf))
-  C.wiringPiSPIDataRW(C.CHANNEL, spibufPtr, 2)
+  C.wiringPiSPIDataRW(C.int(go_CHANNEL), spibufPtr, 2)
   go_unselectreceiver()
   return byte (spibuf[1]) 
 }
@@ -111,9 +115,9 @@ func go_opmodeLora() {
 
 
 func go_SetupLoRa() {
-  C.digitalWrite(C.RST, C.HIGH)
+  C.digitalWrite(C.int(go_RST), C.HIGH)
   time.Sleep(100*time.Millisecond)
-  C.digitalWrite(C.RST, C.LOW)
+  C.digitalWrite(C.int(go_RST), C.LOW)
   time.Sleep(100*time.Millisecond)
 
   var version byte = go_readReg(C.REG_VERSION)
@@ -124,9 +128,9 @@ func go_SetupLoRa() {
     sx1272 = true
   } else {
     // sx1276?
-    C.digitalWrite(C.RST, C.LOW)
+    C.digitalWrite(C.int(go_RST), C.LOW)
     time.Sleep(100*time.Millisecond)
-    C.digitalWrite(C.RST, C.HIGH)
+    C.digitalWrite(C.int(go_RST), C.HIGH)
     time.Sleep(100*time.Millisecond)
     version = go_readReg(C.REG_VERSION)
     if version == 0x12 {
@@ -202,7 +206,7 @@ func go_configPower (pw int8) {
   }
 }
 
-func go_txlora (frame *byte, datalen byte) {
+func go_txlora (send_string string) {
     // set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
     go_writeReg(go_RegDioMapping1, go_MAP_DIO0_LORA_TXDONE|go_MAP_DIO1_LORA_NOP|go_MAP_DIO2_LORA_NOP)
     // clear all radio IRQ flags
@@ -213,26 +217,27 @@ func go_txlora (frame *byte, datalen byte) {
     // initialize the payload size and address pointers
     go_writeReg(go_REG_FIFO_TX_BASE_AD, 0x00)
     go_writeReg(go_REG_FIFO_ADDR_PTR, 0x00)
-    go_writeReg(go_REG_PAYLOAD_LENGTH, datalen)
+    go_writeReg(go_REG_PAYLOAD_LENGTH, byte(len(send_string)))
 
     // download buffer to the radio FIFO
-    go_writeBuf(go_REG_FIFO, frame, datalen)
+    go_writeBuf(go_REG_FIFO, send_string)
     // now we actually start the transmission
     go_opmode(go_OPMODE_TX)
 
-    fmt.Printf("send: %s\n", frame)
+    fmt.Printf("send: %s\n", send_string)
 
 }
 
-func go_writeBuf (addr byte, value *byte, len byte) {
+func go_writeBuf (addr byte, send_string string) {
+    var string_by_byte []byte=[]byte(send_string)
     spibuf:= [256]C.uchar{}                                                  
     spibuf[0] = C.uchar(addr | 0x80)
-    for i:= 0; i < int(len); i++ {         
-        spibuf[i + 1] = value[i]                                               
+    for i:= 0; i < len(send_string); i++ {
+        spibuf[i + 1] = C.uchar(string_by_byte[i])
     }                                                               
     go_selectreceiver()
     spibufPtr:= (*C.uchar)(unsafe.Pointer(&spibuf))              
-    C.wiringPiSPIDataRW(C.CHANNEL, spibufPtr, C.int(len + 1))             
+    C.wiringPiSPIDataRW(C.int(go_CHANNEL), spibufPtr, C.int(len(send_string)+1))      
     go_unselectreceiver()                  
 }
 
@@ -243,10 +248,10 @@ func main() {
   }
   
   C.wiringPiSetup()
-  C.pinMode(C.ssPin, C.OUTPUT)
-  C.pinMode(C.dio0, C.INPUT)
-  C.pinMode(C.RST, C.OUTPUT)
-  C.wiringPiSPISetup(C.CHANNEL,500000)
+  C.pinMode(C.int(go_ssPin), C.OUTPUT)
+  C.pinMode(C.int(go_dio0), C.INPUT)
+  C.pinMode(C.int(go_RST), C.OUTPUT)
+  C.wiringPiSPISetup(C.int(go_CHANNEL),500000)
 
   go_SetupLoRa()
 
@@ -259,6 +264,14 @@ func main() {
   go_configPower(23)
   
   fmt.Printf("Send packets at SF%d on %f Mhz.\n", go_sf, float64(float64(go_freq) / 1000000) )
+  fmt.Println("-----------------------")
+
+  var string_to_send string="test23"
+
+  for {
+    go_txlora(string_to_send)
+    time.Sleep(2*time.Second)  
+  }
 
 }
 
