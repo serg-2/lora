@@ -3,7 +3,8 @@ package main
 /*
 #cgo CFLAGS: -I .
 #cgo LDFLAGS: -L . -lmainlib
-#include "mainlib.h"
+#include <wiringPi.h>
+#include <wiringPiSPI.h>
 */
 import "C"
 import "fmt"
@@ -24,6 +25,8 @@ const go_REG_MODEM_CONFIG=0x1D
 const go_REG_MODEM_CONFIG2=0x1E
 const go_REG_MODEM_CONFIG3=0x26
 const go_REG_SYMB_TIMEOUT_LSB=0x1F
+
+const go_REG_VERSION=0x42
 
 const go_REG_MAX_PAYLOAD_LENGTH=0x23
 const go_REG_PAYLOAD_LENGTH=0x22
@@ -120,7 +123,7 @@ func go_SetupLoRa() {
   C.digitalWrite(C.int(go_RST), C.LOW)
   time.Sleep(100*time.Millisecond)
 
-  var version byte = go_readReg(C.REG_VERSION)
+  var version byte = go_readReg(go_REG_VERSION)
 
   if version == 0x22 {
     // sx1272
@@ -132,7 +135,7 @@ func go_SetupLoRa() {
     time.Sleep(100*time.Millisecond)
     C.digitalWrite(C.int(go_RST), C.HIGH)
     time.Sleep(100*time.Millisecond)
-    version = go_readReg(C.REG_VERSION)
+    version = go_readReg(go_REG_VERSION)
     if version == 0x12 {
       // sx1276
       fmt.Println("SX1276 detected, Starting.")
