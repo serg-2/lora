@@ -82,6 +82,7 @@ var go_RST int = 0
 
 var message string
 var receivedbytes byte
+var send_message string
 
 var send_signal <-chan time.Time
 
@@ -335,7 +336,7 @@ func main_func() {
 	for {
 		select {
 		case <-send_signal:
-			go_txlora("test321")
+			go_txlora(send_message)
 			//fmt.Printf("Send packets at SF%d on %f Mhz.\n", go_sf, float64(float64(go_freq)/1000000))
 
 			// return transciever to receive mode
@@ -356,11 +357,12 @@ func main_func() {
 }
 
 func main() {
-	if len(os.Args[1:]) == 0 {
-		fmt.Printf("Usage: %v [time to send] \n", os.Args[0])
+	if len(os.Args[1:]) != 2 {
+		fmt.Printf("Usage: %v <time to send> <string to send> \n", os.Args[0])
 		os.Exit(0)
 	}
 
+	send_message = os.Args[2]
 	time_from_arg, _ := strconv.Atoi(os.Args[1])
 	send_signal = time.Tick(time.Duration(time_from_arg) * time.Second)
 
