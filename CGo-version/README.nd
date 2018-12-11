@@ -1,0 +1,7 @@
+For building old CGo version:
+
+git clone git://git.drogon.net/wiringPi
+
+cd wiringPi
+
+./build
