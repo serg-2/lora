@@ -1,24 +1,17 @@
 package main
 
+/*
+#cgo CFLAGS: -I .
+#cgo LDFLAGS: -L . -lmainlib
+#include <wiringPi.h>
+#include <wiringPiSPI.h>
+*/
+import "C"
 import "fmt"
 import "os"
+import "unsafe"
 import "time"
 import "strconv"
-
-import "github.com/stianeikeland/go-rpio"
-import "log"
-
-//Vars for Pi WiringPI
-//var ssPin int = 6
-//var dio0 int = 7
-//var RST int = 0
-
-//Vars for go-rpio
-var ssPin rpio.Pin = 25
-var dio0 rpio.Pin = 4
-var RST rpio.Pin = 17
-
-var CHANNEL uint8 = 0
 
 const go_REG_OPMODE = 0x01
 const go_OPMODE_MASK = 0x07
@@ -82,6 +75,10 @@ const (
 const go_sf = SF7
 
 var sx1272 bool
+var go_CHANNEL int = 0
+var go_ssPin int = 6
+var go_dio0 int = 7
+var go_RST int = 0
 
 var message string
 var receivedbytes byte
@@ -90,31 +87,33 @@ var send_message string
 var send_signal <-chan time.Time
 
 func go_selectreceiver() {
-        rpio.WritePin(ssPin, rpio.Low)
+	C.digitalWrite(C.int(go_ssPin), C.LOW)
 }
 
 func go_unselectreceiver() {
-        rpio.WritePin(ssPin, rpio.High)
+	C.digitalWrite(C.int(go_ssPin), C.HIGH)
 }
 
 func go_writeReg(addr byte, value byte) {
-        var spibuf byte = addr | 0x80
-        go_selectreceiver()
-        rpio.SpiTransmit(spibuf,value)
-        go_unselectreceiver()
+	spibuf := [2]C.uchar{}
+	spibuf[0] = C.uchar(addr | 0x80)
+	spibuf[1] = C.uchar(value)
+	go_selectreceiver()
+	spibufPtr := (*C.uchar)(unsafe.Pointer(&spibuf))
+	C.wiringPiSPIDataRW(C.int(go_CHANNEL), spibufPtr, 2)
+	go_unselectreceiver()
 }
 
 func go_readReg(addr byte) byte {
-        var spibuf []byte
-        spibuf = make([]byte, 2)
-        go_selectreceiver()
-        spibuf[0] = addr & 0x7F
-        spibuf[1] = 0x00
-        rpio.SpiExchange(spibuf)     
-        go_unselectreceiver()
-        return byte(spibuf[1])
+	spibuf := [2]C.uchar{}
+	go_selectreceiver()
+	spibuf[0] = C.uchar(addr & 0x7F)
+	spibuf[1] = C.uchar(0x00)
+	spibufPtr := (*C.uchar)(unsafe.Pointer(&spibuf))
+	C.wiringPiSPIDataRW(C.int(go_CHANNEL), spibufPtr, 2)
+	go_unselectreceiver()
+	return byte(spibuf[1])
 }
-
 
 func go_opmode(mode byte) {
 	go_writeReg(go_REG_OPMODE, go_readReg(go_REG_OPMODE)&go_not_OPMODE_MASK|mode)
@@ -129,20 +128,22 @@ func go_opmodeLora() {
 }
 
 func go_SetupLoRa() {
-        rpio.WritePin(RST, rpio.High)
+	C.digitalWrite(C.int(go_RST), C.HIGH)
 	time.Sleep(100 * time.Millisecond)
-        rpio.WritePin(RST, rpio.Low)
+	C.digitalWrite(C.int(go_RST), C.LOW)
 	time.Sleep(100 * time.Millisecond)
+
 	var version byte = go_readReg(go_REG_VERSION)
+
 	if version == 0x22 {
 		// sx1272
 		fmt.Println("SX1272 detected, starting.")
 		sx1272 = true
 	} else {
 		// sx1276?
-                rpio.WritePin(RST, rpio.Low)
+		C.digitalWrite(C.int(go_RST), C.LOW)
 		time.Sleep(100 * time.Millisecond)
-                rpio.WritePin(RST, rpio.High)
+		C.digitalWrite(C.int(go_RST), C.HIGH)
 		time.Sleep(100 * time.Millisecond)
 		version = go_readReg(go_REG_VERSION)
 		if version == 0x12 {
@@ -232,7 +233,7 @@ func go_txlora(send_string string) {
 	go_writeReg(go_REG_PAYLOAD_LENGTH, byte(len(send_string)))
 
 	// download buffer to the radio FIFO
-        writeBuf(go_REG_FIFO, send_string)
+	go_writeBuf(go_REG_FIFO, send_string)
 	// now we actually start the transmission
 	go_opmode(go_OPMODE_TX)
 
@@ -240,18 +241,24 @@ func go_txlora(send_string string) {
 
 }
 
-func writeBuf(addr byte, send_string string) {
-        var string_by_byte []byte = []byte(send_string)
-        go_selectreceiver()
-        rpio.SpiTransmit(string_by_byte...)
-        go_unselectreceiver()
+func go_writeBuf(addr byte, send_string string) {
+	var string_by_byte []byte = []byte(send_string)
+	spibuf := [256]C.uchar{}
+	spibuf[0] = C.uchar(addr | 0x80)
+	for i := 0; i < len(send_string); i++ {
+		spibuf[i+1] = C.uchar(string_by_byte[i])
+	}
+	go_selectreceiver()
+	spibufPtr := (*C.uchar)(unsafe.Pointer(&spibuf))
+	C.wiringPiSPIDataRW(C.int(go_CHANNEL), spibufPtr, C.int(len(send_string)+1))
+	go_unselectreceiver()
 }
 
 func go_receivepacket() {
 	var SNR int
 	var rssicorr int
 
-        if int(rpio.ReadPin(dio0)) == 1 {
+	if int(C.digitalRead(C.int(go_dio0))) == 1 {
 		if a, message := go_receive(); a {
 			value := byte(go_readReg(go_REG_PKT_SNR_VALUE))
 			if (value & 0x80) == 1 { //The SNR sign bit is 1
@@ -309,19 +316,11 @@ func go_receive() (bool, string) {
 }
 
 func main_func() {
-        err:=rpio.Open()
-        if err != nil {
-          log.Fatal(err)
-        }
-        rpio.PinMode(ssPin,rpio.Output)
-        rpio.PinMode(dio0,rpio.Input)
-        rpio.PinMode(RST,rpio.Output)
-        if err := rpio.SpiBegin(rpio.Spi0); err != nil {
-		panic(err)
-        }
-        rpio.SpiChipSelect(CHANNEL) 
-        rpio.SpiSpeed(500000)
-
+	C.wiringPiSetup()
+	C.pinMode(C.int(go_ssPin), C.OUTPUT)
+	C.pinMode(C.int(go_dio0), C.INPUT)
+	C.pinMode(C.int(go_RST), C.OUTPUT)
+	C.wiringPiSPISetup(C.int(go_CHANNEL), 500000)
 	go_SetupLoRa()
 
 	// Prepare to send block
