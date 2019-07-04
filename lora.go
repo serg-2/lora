@@ -241,9 +241,13 @@ func go_txlora(send_string string) {
 }
 
 func writeBuf(addr byte, send_string string) {
-        var string_by_byte []byte = []byte(send_string)
+        string_by_bytes := make([]byte, 1+len(send_string))
+        string_by_bytes[0] = addr | 0x80
+        for i := range send_string {
+            string_by_bytes[i+1] = []byte(send_string)[i]
+        }
         go_selectreceiver()
-        rpio.SpiTransmit(string_by_byte...)
+        rpio.SpiTransmit(string_by_bytes...)
         go_unselectreceiver()
 }
 
