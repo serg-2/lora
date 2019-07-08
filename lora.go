@@ -8,7 +8,7 @@ import "strconv"
 import "github.com/stianeikeland/go-rpio"
 import "log"
 
-import "./cryptolib"
+import "github.com/serg-2/go-aes-lib"
 
 //Vars for Pi WiringPI
 //var ssPin int = 6
