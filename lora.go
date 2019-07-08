@@ -281,16 +281,17 @@ func go_receivepacket() {
 			fmt.Printf("Packet RSSI: %d, ", int(go_readReg(0x1A))-rssicorr)
 			fmt.Printf("RSSI: %d, ", int(go_readReg(0x1B))-rssicorr)
 			fmt.Printf("SNR: %v, ", SNR)
-			fmt.Printf("Length: %v", int(receivedbytes))
+			fmt.Printf("Encrypted length: %v", int(receivedbytes))
 			fmt.Printf("\n")
-			fmt.Printf("Payload: %s\n", message)
+			decrypted_message,_ := cryptolib.Decrypt(key, message)
+			fmt.Printf("Payload: %s\n", string(decrypted_message))
 
 		} //received a message
 	} // dio0=1
 }
 
-func go_receive() (bool, string) {
-	var payload [256]byte
+func go_receive() (bool, []byte) {
+	var payload []byte
 
 	// clear rxDone
 	go_writeReg(go_REG_IRQ_FLAGS, 0x40)
@@ -301,7 +302,7 @@ func go_receive() (bool, string) {
 	if (irqflags & 0x20) == 0x20 {
 		fmt.Println("CRC error")
 		go_writeReg(go_REG_IRQ_FLAGS, 0x20)
-		return false, string(payload[:])
+		return false, payload[:]
 	} else {
 		currentAddr := byte(go_readReg(go_REG_FIFO_RX_CURRENT_ADDR))
 		receivedCount := byte(go_readReg(go_REG_RX_NB_BYTES))
@@ -310,11 +311,11 @@ func go_receive() (bool, string) {
 		go_writeReg(go_REG_FIFO_ADDR_PTR, currentAddr)
 
 		for i := 0; i < int(receivedCount); i++ {
-			payload[i] = byte(go_readReg(go_REG_FIFO))
+			payload = append(payload,byte(go_readReg(go_REG_FIFO)))
 		}
 
 	}
-	return true, string(payload[:])
+	return true, payload[:]
 }
 
 func main_func() {
@@ -328,7 +329,7 @@ func main_func() {
         if err := rpio.SpiBegin(rpio.Spi0); err != nil {
 		panic(err)
         }
-        rpio.SpiChipSelect(CHANNEL) 
+        rpio.SpiChipSelect(CHANNEL)
         rpio.SpiSpeed(500000)
 
 	go_SetupLoRa()
