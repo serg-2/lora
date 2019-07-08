@@ -8,6 +8,8 @@ import "strconv"
 import "github.com/stianeikeland/go-rpio"
 import "log"
 
+import "./cryptolib"
+
 //Vars for Pi WiringPI
 //var ssPin int = 6
 //var dio0 int = 7
@@ -85,7 +87,9 @@ var sx1272 bool
 
 var message string
 var receivedbytes byte
-var send_message string
+var send_message []byte
+var message_source string
+var key []byte
 
 var send_signal <-chan time.Time
 
@@ -110,7 +114,7 @@ func go_readReg(addr byte) byte {
         go_selectreceiver()
         spibuf[0] = addr & 0x7F
         spibuf[1] = 0x00
-        rpio.SpiExchange(spibuf)     
+        rpio.SpiExchange(spibuf)
         go_unselectreceiver()
         return byte(spibuf[1])
 }
@@ -218,7 +222,7 @@ func go_configPower(pw int8) {
 	}
 }
 
-func go_txlora(send_string string) {
+func go_txlora(send_array []byte) {
 	// set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
 	go_writeReg(go_RegDioMapping1, go_MAP_DIO0_LORA_TXDONE|go_MAP_DIO1_LORA_NOP|go_MAP_DIO2_LORA_NOP)
 	// clear all radio IRQ flags
@@ -229,18 +233,18 @@ func go_txlora(send_string string) {
 	// initialize the payload size and address pointers
 	go_writeReg(go_REG_FIFO_TX_BASE_AD, 0x00)
 	go_writeReg(go_REG_FIFO_ADDR_PTR, 0x00)
-	go_writeReg(go_REG_PAYLOAD_LENGTH, byte(len(send_string)))
+	go_writeReg(go_REG_PAYLOAD_LENGTH, byte(len(send_array)))
 
 	// download buffer to the radio FIFO
-        writeBuf(go_REG_FIFO, send_string)
+        writeBuf(go_REG_FIFO, send_array)
 	// now we actually start the transmission
 	go_opmode(go_OPMODE_TX)
 
-	fmt.Printf("send: %s\n", send_string)
+	//fmt.Printf("send: %s\n", string(send_array))
 
 }
 
-func writeBuf(addr byte, send_string string) {
+func writeBuf(addr byte, send_array []byte) {
 //OLD Version        string_by_bytes := make([]byte, 1+len(send_string))
 //Old Version        string_by_bytes[0] = addr | 0x80
 //Old Version        for i := range send_string {
@@ -248,7 +252,7 @@ func writeBuf(addr byte, send_string string) {
 //Old Version        }
         go_selectreceiver()
 //OLD Version        rpio.SpiTransmit(string_by_bytes...)
-        rpio.SpiTransmit(append ([]byte{addr | 0x80},[]byte(send_string)...)...)
+        rpio.SpiTransmit(append ([]byte{addr | 0x80},send_array...)...)
 	go_unselectreceiver()
 }
 
@@ -343,6 +347,7 @@ func main_func() {
 		select {
 		case <-send_signal:
 			go_txlora(send_message)
+			fmt.Printf("Send: %s\n", message_source)
 			//fmt.Printf("Send packets at SF%d on %f Mhz.\n", go_sf, float64(float64(go_freq)/1000000))
 
 			// return transciever to receive mode
@@ -368,8 +373,12 @@ func main() {
 		os.Exit(0)
 	}
 
-	send_message = os.Args[2]
+	message_source = os.Args[2]
 	time_from_arg, _ := strconv.Atoi(os.Args[1])
+
+	key = []byte("Mega secret key SUper 123OGON !!") // 32 bytes \ 256 bit
+	send_message,_ = cryptolib.Encrypt(key, []byte(message_source))
+
 	send_signal = time.Tick(time.Duration(time_from_arg) * time.Second)
 
 	main_func()
