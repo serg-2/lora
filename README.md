@@ -1,6 +1,2 @@
-# lora Example on Go
-Versions:
-C
-CGo
-Go
-Now: with features
+# Dragino project 
+In Progress
