@@ -7,6 +7,7 @@ import "strconv"
 
 import "github.com/serg-2/libs-go/cryptolib"
 import "github.com/serg-2/libs-go/loralib"
+import "github.com/serg-2/libs-go/seriallib"
 
 var message string
 var receivedbytes byte
@@ -59,6 +60,14 @@ func main() {
 	send_message, _ = cryptolib.Encrypt(key, []byte(message_source))
 
 	send_signal = time.Tick(time.Duration(time_from_arg) * time.Second)
+
+//Serial Part	
+	baud_rate := 9600
+	serial_port := "/dev/ttyS0"
+	x, y, status := seriallib.GetPosition("GGA", serial_port, baud_rate, true)
+	if status {
+		fmt.Printf("%v --- %v\n", x, y)
+	}
 
 	main_func()
 
