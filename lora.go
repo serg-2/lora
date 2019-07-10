@@ -5,8 +5,8 @@ import "os"
 import "time"
 import "strconv"
 
-import "github.com/serg-2/go-aes-lib"
-import "github.com/serg-2/go-lora-lib"
+import "github.com/serg-2/libs-go/cryptolib"
+import "github.com/serg-2/libs-go/loralib"
 
 var message string
 var receivedbytes byte
