@@ -5,17 +5,19 @@ import "os"
 import "time"
 import "encoding/json"
 import "strings"
+import "strconv"
 
 import "github.com/serg-2/libs-go/cryptolib"
 import "github.com/serg-2/libs-go/loralib"
 import "github.com/serg-2/libs-go/seriallib"
+import "github.com/serg-2/libs-go/marinelib"
 
 var message string
 var receivedbytes byte
 var send_message []byte
 var message_source string
 var key []byte
-var x,y float64
+var myposition,recposition,baseposition [2]float64
 var status bool
 
 var conf Configuration
@@ -35,11 +37,16 @@ func update_coordinate() {
 	for {
 		<-update_timer
 		for status !=true {
-			x, y, status = seriallib.GetPosition("GGA", conf.Serial_port, conf.Baud_rate, true)
+			myposition, status = seriallib.GetPosition("GGA", conf.Serial_port, conf.Baud_rate, true)
 		}
 		status = false
 		//fmt.Println ("Coordinate updated")
 	}
+}
+
+func parsefloat (s string) (float64) {
+	_r,_ := strconv.ParseFloat(s,64)
+	return _r
 }
 
 func main_func() {
@@ -54,7 +61,7 @@ func main_func() {
 	for {
 		select {
 		case <-send_signal:
-			message_source = fmt.Sprintf("%09.6f,%010.6f",x,y)
+			message_source = fmt.Sprintf("%09.6f,%010.6f",myposition[0],myposition[1])
 			send_message, _ = cryptolib.Encrypt(key, []byte(message_source))
 			loralib.Send(send_message)
 			fmt.Printf("Send: %s\n", message_source)
@@ -68,8 +75,11 @@ func main_func() {
 			if status {
 				decrypted_message, _ := cryptolib.Decrypt(key, received_message)
 				fmt.Printf("Payload: %s\n", string(decrypted_message))
-				if len(strings.Split(string(decrypted_message),",")) != 2 {
-					fmt.Println("err")
+				if len(strings.Split(string(decrypted_message),",")) == 2 {
+					recposition[0] = parsefloat(strings.Split(string(decrypted_message),",")[0])
+					recposition[1] = parsefloat(strings.Split(string(decrypted_message),",")[1])
+					fmt.Printf("Distance: %s\n",fmt.Sprintf("%5.2f",marinelib.CalculateDistance(recposition,baseposition)))
+					fmt.Printf("Bearing: %s\n",fmt.Sprintf("%5d",marinelib.CalculateBearing(recposition,baseposition)))
 				}
 			}
 			time.Sleep(500 * time.Millisecond)
@@ -99,6 +109,8 @@ func main() {
 	key = []byte(conf.Key) // 32 bytes \ 256 bit
 	send_signal = time.Tick(time.Duration(conf.Sending_timer) * time.Second)
 	update_timer = time.Tick(time.Duration(conf.Update_coordinate_timer) * time.Second)
+
+	baseposition = [2]float64{parsefloat(strings.Split(conf.Base_coordinates,",")[0]),parsefloat(strings.Split(conf.Base_coordinates,",")[1])}
 
 	go update_coordinate()
 
