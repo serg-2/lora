@@ -22,7 +22,7 @@ var receivedbytes byte
 var send_message []byte
 var message_source string
 var key []byte
-var myposition, recposition, baseposition,tmpposition [2]float64
+var myposition, recposition, baseposition, tmpposition [2]float64
 var status bool
 
 var conf Configuration
@@ -37,12 +37,20 @@ type Configuration struct {
 	Running_mode     string
 }
 
+func initiate_coordinate() {
+	fmt.Println("Initiating position...")
+	status = false
+	for status != true {
+		myposition, status = seriallib.GetPosition("GGA", conf.Serial_port, conf.Baud_rate, false)
+	}
+}
+
 func update_coordinate() {
 	for {
 		<-local_update_timer
+		status=false
 		for status != true {
 			tmpposition, status = seriallib.GetPosition("GGA", conf.Serial_port, conf.Baud_rate, true)
-			status = false
 		}
 		myposition = tmpposition
 		//fmt.Println("Coordinate updated")
@@ -64,6 +72,7 @@ func main_func() {
 
 	// Start MAIN CYCLE
 	for {
+		fmt.Printf("Pos: %09.6f,%010.6f\n", myposition[0], myposition[1])
 		select {
 		case <-send_signal_frequency:
 			message_source = fmt.Sprintf("%09.6f,%010.6f", myposition[0], myposition[1])
@@ -125,6 +134,7 @@ func main() {
 		send_signal_frequency = time.Tick(time.Duration(SEND_FREQUENCY_ROVER) * time.Second)
 		local_update_timer = time.Tick(time.Duration(UPDATE_LOCAL_COORDINATE_ROVER) * time.Second)
 		fmt.Println("Running Rover protocol")
+		initiate_coordinate()
 	}
 
 	go update_coordinate()
