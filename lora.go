@@ -48,7 +48,7 @@ func initiate_coordinate() {
 func update_coordinate() {
 	for {
 		<-local_update_timer
-		status=false
+		status = false
 		for status != true {
 			tmpposition, status = seriallib.GetPosition("GGA", conf.Serial_port, conf.Baud_rate, true)
 		}
@@ -72,7 +72,7 @@ func main_func() {
 
 	// Start MAIN CYCLE
 	for {
-		fmt.Printf("Pos: %09.6f,%010.6f\n", myposition[0], myposition[1])
+		//	fmt.Printf("Pos: %09.6f,%010.6f\n", myposition[0], myposition[1])
 		select {
 		case <-send_signal_frequency:
 			message_source = fmt.Sprintf("%09.6f,%010.6f", myposition[0], myposition[1])
