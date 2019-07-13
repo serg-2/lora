@@ -22,7 +22,7 @@ var receivedbytes byte
 var send_message []byte
 var message_source string
 var key []byte
-var myposition, recposition, baseposition [2]float64
+var myposition, recposition, baseposition,tmpposition [2]float64
 var status bool
 
 var conf Configuration
@@ -41,10 +41,11 @@ func update_coordinate() {
 	for {
 		<-local_update_timer
 		for status != true {
-			myposition, status = seriallib.GetPosition("GGA", conf.Serial_port, conf.Baud_rate, true)
+			tmpposition, status = seriallib.GetPosition("GGA", conf.Serial_port, conf.Baud_rate, true)
 			status = false
-			//fmt.Println("Coordinate updated")
 		}
+		myposition = tmpposition
+		//fmt.Println("Coordinate updated")
 	}
 }
 
@@ -117,11 +118,13 @@ func main() {
 	if conf.Running_mode == "base_station" {
 		send_signal_frequency = time.Tick(time.Duration(SEND_FREQUENCY_BASE_STATION) * time.Second)
 		local_update_timer = time.Tick(time.Duration(UPDATE_LOCAL_COORDINATE_BASE_STATION) * time.Second)
+		fmt.Println("Running Base Station protocol")
 		//DEBUG
 		myposition = baseposition
 	} else {
 		send_signal_frequency = time.Tick(time.Duration(SEND_FREQUENCY_ROVER) * time.Second)
 		local_update_timer = time.Tick(time.Duration(UPDATE_LOCAL_COORDINATE_ROVER) * time.Second)
+		fmt.Println("Running Rover protocol")
 	}
 
 	go update_coordinate()
