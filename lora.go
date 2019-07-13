@@ -35,6 +35,7 @@ type Configuration struct {
 	Key              string
 	Base_coordinates string
 	Running_mode     string
+	Name             string
 }
 
 func initiate_coordinate() {
@@ -75,7 +76,7 @@ func main_func() {
 		//	fmt.Printf("Pos: %09.6f,%010.6f\n", myposition[0], myposition[1])
 		select {
 		case <-send_signal_frequency:
-			message_source = fmt.Sprintf("%09.6f,%010.6f", myposition[0], myposition[1])
+			message_source = fmt.Sprintf("%s,%09.6f,%010.6f", conf.Name, myposition[0], myposition[1])
 			send_message, _ = cryptolib.Encrypt(key, []byte(message_source))
 			loralib.Send(send_message)
 			fmt.Printf("Send: %s\n", message_source)
@@ -89,9 +90,9 @@ func main_func() {
 			if status {
 				decrypted_message, _ := cryptolib.Decrypt(key, received_message)
 				fmt.Printf("Payload: %s\n", string(decrypted_message))
-				if len(strings.Split(string(decrypted_message), ",")) == 2 {
-					recposition[0] = parsefloat(strings.Split(string(decrypted_message), ",")[0])
-					recposition[1] = parsefloat(strings.Split(string(decrypted_message), ",")[1])
+				if len(strings.Split(string(decrypted_message), ",")) == 3 {
+					recposition[0] = parsefloat(strings.Split(string(decrypted_message), ",")[1])
+					recposition[1] = parsefloat(strings.Split(string(decrypted_message), ",")[2])
 					fmt.Printf("Distance: %s\n", fmt.Sprintf("%5.2f", marinelib.CalculateDistance(recposition, myposition)))
 					fmt.Printf("Bearing: %s\n", fmt.Sprintf("%5.1f", marinelib.CalculateBearing(recposition, myposition)))
 				}

@@ -3,5 +3,6 @@
 	 "Serial_port":"/dev/ttyS0",
          "Key":"12345678901234567890123456789012",
 	 "Base_coordinates":"11.111111,022.222222",
-	 "Running_mode":"base_station"
+	 "Running_mode":"base_station",
+	 "Name":"Unit1"
 }
