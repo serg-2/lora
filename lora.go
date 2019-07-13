@@ -82,8 +82,8 @@ func main_func() {
 				if len(strings.Split(string(decrypted_message), ",")) == 2 {
 					recposition[0] = parsefloat(strings.Split(string(decrypted_message), ",")[0])
 					recposition[1] = parsefloat(strings.Split(string(decrypted_message), ",")[1])
-					fmt.Printf("Distance: %s\n", fmt.Sprintf("%5.2f", marinelib.CalculateDistance(recposition, baseposition)))
-					fmt.Printf("Bearing: %s\n", fmt.Sprintf("%5.1f", marinelib.CalculateBearing(recposition, baseposition)))
+					fmt.Printf("Distance: %s\n", fmt.Sprintf("%5.2f", marinelib.CalculateDistance(recposition, myposition)))
+					fmt.Printf("Bearing: %s\n", fmt.Sprintf("%5.1f", marinelib.CalculateBearing(recposition, myposition)))
 				}
 			}
 			time.Sleep(500 * time.Millisecond)
