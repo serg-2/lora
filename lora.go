@@ -12,6 +12,11 @@ import "github.com/serg-2/libs-go/loralib"
 import "github.com/serg-2/libs-go/seriallib"
 import "github.com/serg-2/libs-go/marinelib"
 
+const SEND_FREQUENCY_BASE_STATION = 5
+const SEND_FREQUENCY_ROVER = 300
+const UPDATE_LOCAL_COORDINATE_BASE_STATION = -1
+const UPDATE_LOCAL_COORDINATE_ROVER = 1
+
 var message string
 var receivedbytes byte
 var send_message []byte
@@ -110,13 +115,13 @@ func main() {
 	baseposition = [2]float64{parsefloat(strings.Split(conf.Base_coordinates, ",")[0]), parsefloat(strings.Split(conf.Base_coordinates, ",")[1])}
 
 	if conf.Running_mode == "base_station" {
-		send_signal_frequency = time.Tick(time.Duration(3) * time.Second)
-		local_update_timer = time.Tick(time.Duration(-1) * time.Second)
+		send_signal_frequency = time.Tick(time.Duration(SEND_FREQUENCY_BASE_STATION) * time.Second)
+		local_update_timer = time.Tick(time.Duration(UPDATE_LOCAL_COORDINATE_BASE_STATION) * time.Second)
 		//DEBUG
 		myposition = baseposition
 	} else {
-		send_signal_frequency = time.Tick(time.Duration(500) * time.Second)
-		local_update_timer = time.Tick(time.Duration(1) * time.Second)
+		send_signal_frequency = time.Tick(time.Duration(SEND_FREQUENCY_ROVER) * time.Second)
+		local_update_timer = time.Tick(time.Duration(UPDATE_LOCAL_COORDINATE_ROVER) * time.Second)
 	}
 
 	go update_coordinate()
